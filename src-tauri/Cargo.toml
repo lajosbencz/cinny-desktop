@@ -2,7 +2,7 @@
 
 [package]
 name = "cinny"
-version = "4.11.2"
+version = "4.12.1"
 description = "Yet another matrix client"
 authors = ["Ajay Bura"]
 license = "AGPL-3.0-only"
@@ -28,6 +28,8 @@ tauri-plugin-http = "2"
 tauri-plugin-process = "2"
 tauri-plugin-os = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+monio = "0.1"
 
 [features]
 # by default Tauri runs in production mode
@@ -40,6 +42,13 @@ custom-protocol = [ "tauri/custom-protocol" ]
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-updater = "2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt"] }
+webkit2gtk = "2"
+gtk = "0.18"
 
 [lib]
 name = "app_lib"

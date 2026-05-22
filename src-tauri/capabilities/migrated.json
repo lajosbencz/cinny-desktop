@@ -2,11 +2,20 @@
   "identifier": "migrated",
   "description": "permissions that were migrated from v1",
   "local": true,
+  "remote": {
+    "urls": [
+      "http://localhost:44548"
+    ]
+  },
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:event:allow-emit",
+    "core:event:allow-emit-to",
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-read-dir",
@@ -77,6 +86,10 @@
     "clipboard-manager:allow-write-text",
     "core:app:allow-app-show",
     "core:app:allow-app-hide",
-    "clipboard-manager:default"
+    "clipboard-manager:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "http://*" }, { "url": "https://*" }]
+    }
   ]
 }
