@@ -113,7 +113,6 @@ jobs:
         name: "PTT snapshot"
         draft: true
         prerelease: true
-        target_commitish: ${{ github.sha }}
         files: artifacts/**
         body: |
           Rolling snapshot of `feat/push-to-talk`.
