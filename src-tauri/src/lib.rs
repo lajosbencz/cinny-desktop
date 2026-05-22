@@ -11,7 +11,23 @@ mod wayland_ptt;
 use tauri::{webview::{NewWindowResponse, WebviewWindowBuilder}, WebviewUrl};
 use tauri_plugin_opener::OpenerExt;
 
+#[cfg(target_os = "linux")]
+fn apply_webkit_workarounds() {
+    // Disable WebKitGTK's DMA-BUF renderer; it fails on many host GPU stacks
+    // (NVIDIA, certain Wayland compositors, AppImage bundles). Set only if the
+    // user hasn't overridden it.
+    // Precedent: https://github.com/refactoringhq/tolaria/commit/8c286a4856637d662f05428f679faa4aee607c66
+    for (key, value) in [("WEBKIT_DISABLE_DMABUF_RENDERER", "1")] {
+        if std::env::var_os(key).is_none() {
+            std::env::set_var(key, value);
+        }
+    }
+}
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    apply_webkit_workarounds();
+
     let port: u16 = 44548;
     let context = tauri::generate_context!();
     let builder = tauri::Builder::default()
