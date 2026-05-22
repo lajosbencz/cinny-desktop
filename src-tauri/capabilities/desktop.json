@@ -5,6 +5,9 @@
     "windows",
     "linux"
   ],
+  "remote": {
+    "urls": ["http://localhost:44548"]
+  },
   "windows": [
     "main"
   ],
