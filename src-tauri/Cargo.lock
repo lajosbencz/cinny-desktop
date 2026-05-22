@@ -515,6 +515,7 @@ name = "cinny"
 version = "4.12.1"
 dependencies = [
  "futures-util",
+ "gtk",
  "monio",
  "serde",
  "serde_json",

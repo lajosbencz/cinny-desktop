@@ -131,10 +131,12 @@ pub fn run() {
             // Precedent: https://github.com/tauri-apps/tauri/discussions/8426
             #[cfg(target_os = "linux")]
             {
-                use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+                use gtk::prelude::*;
+                use gtk::{
+                    ButtonsType, DialogFlags, MessageDialog, MessageType, ResponseType, Window,
+                };
                 use webkit2gtk::{PermissionRequestExt, SettingsExt, WebViewExt};
 
-                let dialog_handle = app.handle().clone();
                 window.with_webview(move |webview| {
                     let wv = webview.inner();
                     if let Some(settings) = WebViewExt::settings(&wv) {
@@ -150,23 +152,21 @@ pub fn run() {
                             request.deny();
                             return true;
                         };
-                        let request = request.clone();
-                        dialog_handle
-                            .dialog()
-                            .message(format!("Cinny wants to {label}."))
-                            .title("Permission request")
-                            .kind(MessageDialogKind::Info)
-                            .buttons(MessageDialogButtons::OkCancelCustom(
-                                "Allow".into(),
-                                "Deny".into(),
-                            ))
-                            .show(move |allowed| {
-                                if allowed {
-                                    request.allow();
-                                } else {
-                                    request.deny();
-                                }
-                            });
+                        let dialog = MessageDialog::new::<Window>(
+                            None,
+                            DialogFlags::MODAL,
+                            MessageType::Question,
+                            ButtonsType::YesNo,
+                            &format!("Cinny wants to {label}."),
+                        );
+                        dialog.set_title("Permission request");
+                        let response = dialog.run();
+                        dialog.close();
+                        if response == ResponseType::Yes {
+                            request.allow();
+                        } else {
+                            request.deny();
+                        }
                         true
                     });
                 })?;
