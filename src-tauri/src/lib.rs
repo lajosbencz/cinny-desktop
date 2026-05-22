@@ -67,13 +67,37 @@ pub fn run() {
             };
 
             let app_handle = app.handle().clone();
-            WebviewWindowBuilder::new(app, "main".to_string(), window_url)
+            let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Cinny")
                 .on_new_window(move |url, _features| {
                     let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
                     NewWindowResponse::Deny
                 })
                 .build()?;
+
+            // WebKitGTK ships WebRTC but Tauri leaves it off by default. Flip
+            // the settings and auto-allow getUserMedia / display-capture so
+            // Cinny's calling UI can negotiate.
+            // Precedent: https://github.com/tauri-apps/tauri/discussions/8426
+            #[cfg(target_os = "linux")]
+            {
+                use webkit2gtk::{PermissionRequestExt, SettingsExt, WebViewExt};
+                window.with_webview(|webview| {
+                    let wv = webview.inner();
+                    if let Some(settings) = WebViewExt::settings(&wv) {
+                        settings.set_enable_webrtc(true);
+                        settings.set_enable_media_stream(true);
+                        settings.set_enable_mediasource(true);
+                        settings.set_media_playback_requires_user_gesture(false);
+                        settings.set_media_playback_allows_inline(true);
+                    }
+                    wv.connect_permission_request(move |_, request| {
+                        request.allow();
+                        true
+                    });
+                })?;
+            }
+
             Ok(())
         })
         .run(context)

@@ -534,6 +534,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tokio",
+ "webkit2gtk",
  "zbus",
 ]
 
