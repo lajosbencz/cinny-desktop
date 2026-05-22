@@ -12,6 +12,38 @@ use tauri::{webview::{NewWindowResponse, WebviewWindowBuilder}, WebviewUrl};
 use tauri_plugin_opener::OpenerExt;
 
 #[cfg(target_os = "linux")]
+fn describe_permission_request(request: &webkit2gtk::PermissionRequest) -> Option<String> {
+    use webkit2gtk::glib::object::Cast;
+    use webkit2gtk::{
+        DeviceInfoPermissionRequest, GeolocationPermissionRequest,
+        NotificationPermissionRequest, PointerLockPermissionRequest,
+        UserMediaPermissionRequest, UserMediaPermissionRequestExt,
+    };
+
+    if let Some(umr) = request.dynamic_cast_ref::<UserMediaPermissionRequest>() {
+        return Some(match (umr.is_for_audio_device(), umr.is_for_video_device()) {
+            (true, true) => "use your microphone and camera".into(),
+            (true, false) => "use your microphone".into(),
+            (false, true) => "use your camera".into(),
+            (false, false) => "use a media device".into(),
+        });
+    }
+    if request.dynamic_cast_ref::<NotificationPermissionRequest>().is_some() {
+        return Some("show desktop notifications".into());
+    }
+    if request.dynamic_cast_ref::<GeolocationPermissionRequest>().is_some() {
+        return Some("access your location".into());
+    }
+    if request.dynamic_cast_ref::<PointerLockPermissionRequest>().is_some() {
+        return Some("lock your mouse pointer".into());
+    }
+    if request.dynamic_cast_ref::<DeviceInfoPermissionRequest>().is_some() {
+        return Some("see your media device list".into());
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
 fn apply_webkit_workarounds() {
     // Disable WebKitGTK's DMA-BUF renderer; it fails on many host GPU stacks
     // (NVIDIA, certain Wayland compositors, AppImage bundles). Set only if the
@@ -67,22 +99,43 @@ pub fn run() {
             };
 
             let app_handle = app.handle().clone();
-            let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
+            #[allow(unused_mut)]
+            let mut builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Cinny")
                 .on_new_window(move |url, _features| {
                     let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
                     NewWindowResponse::Deny
-                })
-                .build()?;
+                });
+
+            // WebKitGTK applies setting changes only on the next page load; the
+            // webview starts loading before with_webview() runs, so the SPA's
+            // first feature-detection misses RTCPeerConnection. Inject a tiny
+            // script that triggers a one-shot reload if WebRTC isn't visible
+            // yet — by the second load our settings are in effect.
+            #[cfg(target_os = "linux")]
+            {
+                builder = builder.initialization_script(
+                    "if (typeof RTCPeerConnection === 'undefined' \
+                       && !sessionStorage.getItem('cinny-desktop:webrtc-reload')) { \
+                         sessionStorage.setItem('cinny-desktop:webrtc-reload', '1'); \
+                         location.reload(); \
+                       }",
+                );
+            }
+
+            let window = builder.build()?;
 
             // WebKitGTK ships WebRTC but Tauri leaves it off by default. Flip
-            // the settings and auto-allow getUserMedia / display-capture so
-            // Cinny's calling UI can negotiate.
+            // the settings and prompt the user for each permission request the
+            // webview makes (mic, camera, notifications, ...).
             // Precedent: https://github.com/tauri-apps/tauri/discussions/8426
             #[cfg(target_os = "linux")]
             {
+                use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
                 use webkit2gtk::{PermissionRequestExt, SettingsExt, WebViewExt};
-                window.with_webview(|webview| {
+
+                let dialog_handle = app.handle().clone();
+                window.with_webview(move |webview| {
                     let wv = webview.inner();
                     if let Some(settings) = WebViewExt::settings(&wv) {
                         settings.set_enable_webrtc(true);
@@ -92,7 +145,28 @@ pub fn run() {
                         settings.set_media_playback_allows_inline(true);
                     }
                     wv.connect_permission_request(move |_, request| {
-                        request.allow();
+                        let Some(label) = describe_permission_request(request) else {
+                            // Unknown permission type: deny by default.
+                            request.deny();
+                            return true;
+                        };
+                        let request = request.clone();
+                        dialog_handle
+                            .dialog()
+                            .message(format!("Cinny wants to {label}."))
+                            .title("Permission request")
+                            .kind(MessageDialogKind::Info)
+                            .buttons(MessageDialogButtons::OkCancelCustom(
+                                "Allow".into(),
+                                "Deny".into(),
+                            ))
+                            .show(move |allowed| {
+                                if allowed {
+                                    request.allow();
+                                } else {
+                                    request.deny();
+                                }
+                            });
                         true
                     });
                 })?;
